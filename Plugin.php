@@ -72,6 +72,20 @@ class Plugin extends PluginBase
                         $image = new Image($image);
                     }
                     return getimagesize($image->getCachedImagePath())[1];
+                },
+                'orientation' => function($image) {
+                    if (!$image instanceOf Image) {
+                        $image = new Image($image);
+                    }
+
+                    $imageDimensions = @getimagesize($image->getCachedImagePath());
+
+                    // Error fallback
+                    if(!$imageDimensions) return 'horizontal';
+
+                    // Height > width
+                    if($imageDimensions[1] > $imageDimensions[0]) return 'horizontal';
+                    return 'vertical';
                 }
             ]
         ];
