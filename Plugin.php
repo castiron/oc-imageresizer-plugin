@@ -62,23 +62,18 @@ class Plugin extends PluginBase
                     return $image->resize($width, $height, $options);
                 },
                 'imageWidth' => function($image) {
-                    if (!$image instanceOf Image) {
-                        $image = new Image($image);
-                    }
-                    return getimagesize($image->getCachedImagePath())[0];
+                    $imagePath = (string) $image;
+                    if(file_exists($imagePath) && is_file($imagePath)) return getimagesize($imagePath)[0];
                 },
                 'imageHeight' => function($image) {
-                    if (!$image instanceOf Image) {
-                        $image = new Image($image);
-                    }
-                    return getimagesize($image->getCachedImagePath())[1];
+                    $imagePath = (string) $image;
+                    if(file_exists($imagePath) && is_file($imagePath)) return getimagesize($imagePath)[1];
                 },
                 'orientation' => function($image) {
-                    if (!$image instanceOf Image) {
-                        $image = new Image($image);
-                    }
+                    $imagePath = (string) $image;
+                    if(!file_exists($imagePath) || !is_file($imagePath)) return 'horizontal';
 
-                    $imageDimensions = @getimagesize($image->getCachedImagePath());
+                    $imageDimensions = getimagesize($imagePath);
 
                     // Error fallback
                     if(!$imageDimensions) return 'horizontal';
