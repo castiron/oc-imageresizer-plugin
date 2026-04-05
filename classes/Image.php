@@ -4,9 +4,11 @@ use ToughDeveloper\ImageResizer\Models\Settings;
 use October\Rain\Database\Attach\File;
 use Tinify\Tinify;
 use Tinify\Source;
+use Log;
 
 class Image
 {
+    const PLACEHOLDER_HASH = 'f6c2d784663d3e926d752a8d19ce16a8496034308cd910de7a4743a0e153b95f';
     /**
      * Original path of image
      */
@@ -87,6 +89,14 @@ class Image
         // Set the thumbfilename to save passing variables to many functions
         $this->thumbFilename = $this->getThumbFilename($width, $height);
 
+        // Check for pre-existing broken thumb before generation
+        $cachedPath = $this->getCachedImagePath();
+        if (file_exists($cachedPath) && filesize($cachedPath) === 0) {
+            $this->logThumbIssue('pre_existing_zero_size', $width, $height, [
+                'note' => 'Found 0-byte thumb before regeneration attempt',
+            ]);
+        }
+
         // If the image is cached, don't try resized it.
         if (! $this->isImageCached()) {
             // Set the file to be created from another file
@@ -104,6 +114,9 @@ class Image
             touch($this->getCachedImagePath(), filemtime($this->filePath));
             
             $this->deleteTempFile();
+            
+            // Check if generation resulted in broken thumb
+            $this->checkGeneratedThumb($width, $height);
         }
 
         // Return the URL
@@ -329,5 +342,76 @@ class Image
     public function __toString()
     {
         return $this->getCachedImagePath(true);
+    }
+    
+    /**
+     * Check if generated thumb is broken (0-size or placeholder)
+     */
+    protected function checkGeneratedThumb($width, $height)
+    {
+        $cachedPath = $this->getCachedImagePath();
+        
+        if (!file_exists($cachedPath)) {
+            $this->logThumbIssue('thumb_not_created', $width, $height);
+            return;
+        }
+        
+        $size = filesize($cachedPath);
+        
+        if ($size === 0) {
+            $this->logThumbIssue('thumb_zero_size', $width, $height);
+            @unlink($cachedPath);
+            return;
+        }
+        
+        if ($this->isPlaceholder($cachedPath)) {
+            $this->logThumbIssue('thumb_placeholder', $width, $height, [
+                'thumb_size' => $size,
+            ]);
+            @unlink($cachedPath);
+        }
+    }
+    
+    /**
+     * Check if file is the placeholder/broken image
+     */
+    protected function isPlaceholder($filePath)
+    {
+        if (!file_exists($filePath) || filesize($filePath) === 0) {
+            return false;
+        }
+        return hash_file('sha256', $filePath) === self::PLACEHOLDER_HASH;
+    }
+    
+    /**
+     * Log thumbnail generation issues
+     */
+    protected function logThumbIssue($type, $width, $height, $extra = [])
+    {
+        $sourceDimensions = null;
+        if (file_exists($this->filePath) && filesize($this->filePath) > 0) {
+            $imageInfo = @getimagesize($this->filePath);
+            if ($imageInfo) {
+                $sourceDimensions = [
+                    'width' => $imageInfo[0],
+                    'height' => $imageInfo[1],
+                    'mime' => $imageInfo['mime'] ?? null,
+                ];
+            }
+        }
+        
+        $context = array_merge([
+            'type' => $type,
+            'source_path' => $this->originalFilePath,
+            'source_exists' => file_exists($this->filePath),
+            'source_size' => file_exists($this->filePath) ? filesize($this->filePath) : 0,
+            'source_dimensions' => $sourceDimensions,
+            'requested_width' => $width,
+            'requested_height' => $height,
+            'options' => $this->options,
+            'cached_path' => $this->getCachedImagePath(),
+        ], $extra);
+        
+        Log::warning('ImageResizer: Thumb issue', $context);
     }
 }
