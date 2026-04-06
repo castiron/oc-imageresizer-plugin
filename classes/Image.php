@@ -412,6 +412,6 @@ class Image
             'cached_path' => $this->getCachedImagePath(),
         ], $extra);
         
-        Log::warning('ImageResizer: Thumb issue', $context);
+        Log::error('ImageResizer: Thumb issue', $context);
     }
 }
