@@ -39,6 +39,11 @@ class Image
      */
     protected $thumbFilename;
 
+    /**
+     * Whether to fall back to original image (set when thumb generation fails)
+     */
+    protected $useFallback = false;
+
     public function __construct($filePath = false)
     {
         $this->originalFilePath = $filePath;
@@ -341,6 +346,9 @@ class Image
      */
     public function __toString()
     {
+        if ($this->useFallback) {
+            return url($this->originalFilePath);
+        }
         return $this->getCachedImagePath(true);
     }
     
@@ -353,6 +361,7 @@ class Image
         
         if (!file_exists($cachedPath)) {
             $this->logThumbIssue('thumb_not_created', $width, $height);
+            $this->useFallback = true;
             return;
         }
         
@@ -361,6 +370,7 @@ class Image
         if ($size === 0) {
             $this->logThumbIssue('thumb_zero_size', $width, $height);
             @unlink($cachedPath);
+            $this->useFallback = true;
             return;
         }
         
@@ -369,6 +379,7 @@ class Image
                 'thumb_size' => $size,
             ]);
             @unlink($cachedPath);
+            $this->useFallback = true;
         }
     }
     
