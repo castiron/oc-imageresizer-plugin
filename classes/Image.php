@@ -100,6 +100,9 @@ class Image
             $this->logThumbIssue('pre_existing_zero_size', $width, $height, [
                 'note' => 'Found 0-byte thumb before regeneration attempt',
             ]);
+            @unlink($cachedPath);
+            $this->useFallback = true;
+            return $this;
         }
 
         // If the image is cached, don't try resized it.
