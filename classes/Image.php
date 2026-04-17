@@ -2,6 +2,7 @@
 
 use ToughDeveloper\ImageResizer\Models\Settings;
 use October\Rain\Database\Attach\File;
+use October\Rain\Database\Attach\Resizer;
 use Tinify\Tinify;
 use Tinify\Source;
 use Log;
@@ -88,9 +89,6 @@ class Image
            $this->options['extension'] = pathinfo($this->filePath)['extension'];
         }
 
-        // Set a disk name, this enables caching
-        $this->file->disk_name = $this->cacheKey();
-
         // Set the thumbfilename to save passing variables to many functions
         $this->thumbFilename = $this->getThumbFilename($width, $height);
 
@@ -105,13 +103,20 @@ class Image
             return $this;
         }
 
-        // If the image is cached, don't try resized it.
+        // If the image is cached, don't try to resize it.
         if (! $this->isImageCached()) {
-            // Set the file to be created from another file
-            $this->file->fromFile($this->filePath);
+            $cachedPath = $this->getCachedImagePath();
+            
+            // Ensure directory exists
+            $dir = dirname($cachedPath);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
 
-            // Resize it
-            $thumb = $this->file->getThumb($width, $height, $this->options);
+            // Resize using Resizer directly (avoids File->getThumb disk_name issues)
+            $resizer = Resizer::open($this->filePath);
+            $resizer->resize($width, $height, $this->options);
+            $resizer->save($cachedPath);
 
             // Not a gif file? Compress with tinyPNG
             if ($this->isCompressionEnabled()) {
@@ -119,9 +124,9 @@ class Image
             }
 
             // Touch the cached image with the original mtime to align them
-            touch($this->getCachedImagePath(), filemtime($this->filePath));
-            
-            $this->deleteTempFile();
+            if (file_exists($cachedPath)) {
+                touch($cachedPath, filemtime($this->filePath));
+            }
             
             // Check if generation resulted in broken thumb
             $this->checkGeneratedThumb($width, $height);
